@@ -167,32 +167,58 @@ main_exception_filter (EXCEPTION_POINTERS *ExceptionInfo)
 #endif
      )
     {
-#if 0 /* for debugging only */
-      printf ("Exception!\n");
-      printf ("Code = 0x%x\n",
-              ExceptionInfo->ExceptionRecord->ExceptionCode);
-      printf ("Flags = 0x%x\n",
-              ExceptionInfo->ExceptionRecord->ExceptionFlags);
-      printf ("Address = 0x%x\n",
-              ExceptionInfo->ExceptionRecord->ExceptionAddress);
+#ifdef DEBUGGING /* for debugging only */
+      PCONTEXT ctx = ExceptionInfo->ContextRecord;
+      EXCEPTION_RECORD *e = ExceptionInfo->ExceptionRecord;
+#ifdef __x86_64__
+      /*if (exception_name)
+        printf ("Exception: %s at rip=%011X\r\n", exception_name, ctx->Rip);
+      else */
+      printf ("Signal %d at rip=%011X\r\n", e->ExceptionCode, ctx->Rip);
+      printf ("Flags = 0x%x\n", e->ExceptionFlags);
+      printf ("Address = 0x%x\n", e->ExceptionAddress);
       printf ("Params:");
       {
         DWORD i;
-        for (i = 0; i < ExceptionInfo->ExceptionRecord->NumberParameters; i++)
+        for (i = 0; i < e->NumberParameters; i++)
+          printf (" 0x%x,", e->ExceptionInformation[i]);
+      }
+      printf ("\n");
+      printf ("rax=%016X rbx=%016X rcx=%016X\r\n", ctx->Rax, ctx->Rbx, ctx->Rcx);
+      printf ("rdx=%016X rsi=%016X rdi=%016X\r\n", ctx->Rdx, ctx->Rsi, ctx->Rdi);
+      printf ("r8 =%016X r9 =%016X r10=%016X\r\n", ctx->R8, ctx->R9, ctx->R10);
+      printf ("r11=%016X r12=%016X r13=%016X\r\n", ctx->R11, ctx->R12, ctx->R13);
+      printf ("r14=%016X r15=%016X\r\n", ctx->R14, ctx->R15);
+      printf ("rbp=%016X rsp=%016X\r\n", ctx->Rbp, ctx->Rsp);
+      /*printf ("program=%W, pid %u, thread %s\r\n",
+        myself->progname, myself->pid, cygthread::name ()); */
+#else
+      printf ("Exception!\n");
+      printf ("Code = 0x%x\n",
+              e->ExceptionCode);
+      printf ("Flags = 0x%x\n",
+              e->ExceptionFlags);
+      printf ("Address = 0x%x\n",
+              e->ExceptionAddress);
+      printf ("Params:");
+      {
+        DWORD i;
+        for (i = 0; i < e->NumberParameters; i++)
           printf (" 0x%x,",
-                  ExceptionInfo->ExceptionRecord->ExceptionInformation[i]);
+                  e->ExceptionInformation[i]);
       }
       printf ("\n");
       printf ("Registers:\n");
-      printf ("eip = 0x%x\n", ExceptionInfo->ContextRecord->Eip);
-      printf ("eax = 0x%x, ", ExceptionInfo->ContextRecord->Eax);
-      printf ("ebx = 0x%x, ", ExceptionInfo->ContextRecord->Ebx);
-      printf ("ecx = 0x%x, ", ExceptionInfo->ContextRecord->Ecx);
-      printf ("edx = 0x%x\n", ExceptionInfo->ContextRecord->Edx);
-      printf ("esi = 0x%x, ", ExceptionInfo->ContextRecord->Esi);
-      printf ("edi = 0x%x, ", ExceptionInfo->ContextRecord->Edi);
-      printf ("ebp = 0x%x, ", ExceptionInfo->ContextRecord->Ebp);
-      printf ("esp = 0x%x\n", ExceptionInfo->ContextRecord->Esp);
+      printf ("eip = 0x%x\n", ctx->Eip);
+      printf ("eax = 0x%x, ", ctx->Eax);
+      printf ("ebx = 0x%x, ", ctx->Ebx);
+      printf ("ecx = 0x%x, ", ctx->Ecx);
+      printf ("edx = 0x%x\n", ctx->Edx);
+      printf ("esi = 0x%x, ", ctx->Esi);
+      printf ("edi = 0x%x, ", ctx->Edi);
+      printf ("ebp = 0x%x, ", ctx->Ebp);
+      printf ("esp = 0x%x\n", ctx->Esp);
+#endif
 #endif
       if (ExceptionInfo->ExceptionRecord->NumberParameters == 2)
         {
@@ -256,7 +282,7 @@ main_exception_filter (EXCEPTION_POINTERS *ExceptionInfo)
   return EXCEPTION_CONTINUE_SEARCH;
 }
 
-#if defined __CYGWIN__ && defined __i386__
+#if defined __CYGWIN__ /*&& defined __i386__*/
 
 /* In Cygwin programs, SetUnhandledExceptionFilter has no effect because Cygwin
    installs a global exception handler.  We have to dig deep in order to install
@@ -277,9 +303,11 @@ typedef struct exception_list exception_list;
 
 /* Magic taken from winsup/cygwin/exceptions.cc.  */
 
+#ifdef __i386__
 __asm__ (".equ __except_list,0");
 
-extern exception_list *_except_list __asm__ ("%fs:__except_list");
+extern exception_list *_except_list
+  __asm__ ("%fs:__except_list");
 
 /* For debugging.  _except_list is not otherwise accessible from gdb.  */
 static
@@ -291,6 +319,7 @@ debug_get_except_list ()
 {
   return _except_list;
 }
+#endif
 
 /* Cygwin's original exception handler.  */
 static int (*cygwin_exception_handler) (EXCEPTION_RECORD *, void *, CONTEXT *, void *);
@@ -314,8 +343,12 @@ do_install_main_exception_filter ()
   /* We cannot insert any handler into the chain, because such handlers
      must lie on the stack (?).  Instead, we have to replace(!) Cygwin's
      global exception handler.  */
+#ifdef __i386__
   cygwin_exception_handler = _except_list->handler;
   _except_list->handler = libsigsegv_exception_handler;
+#else
+  SetUnhandledExceptionFilter ((LPTOP_LEVEL_EXCEPTION_FILTER) &libsigsegv_exception_handler);
+#endif
 }
 
 #else
