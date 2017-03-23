@@ -984,7 +984,13 @@ AC_CACHE_CHECK([if the system supports catching stack overflow],
     sv_cv_have_stack_overflow_recovery=yes
   else
     case "$host_os" in
-      mingw* | windows* | cygwin*) sv_cv_have_stack_overflow_recovery=yes ;;
+      mingw* | windows* | cygwin)
+        if test "$host_cpu" != x86_64; then
+          sv_cv_have_stack_overflow_recovery=yes
+        else
+          sv_cv_have_stack_overflow_recovery=no
+        fi
+        ;;
       *)
         if test "$CFG_LEAVE" != 'leave-none.c'; then
           if test "$sv_cv_sigaltstack" != no; then
