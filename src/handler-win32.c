@@ -214,9 +214,15 @@ main_exception_filter (EXCEPTION_POINTERS *ExceptionInfo)
               new_safe_esp -= 8; /* make room for arguments */
               new_safe_esp &= -16; /* align */
               new_safe_esp -= 4; /* make room for (unused) return address slot */
+#if defined (_AMD64_)
+              ExceptionInfo->ContextRecord->Rsp = new_safe_esp;
+              /* Call stack_overflow_handler(faulting_page_address,safe_context).  */
+              ExceptionInfo->ContextRecord->Rip = (uintptr_t)&stack_overflow_handler;
+#else
               ExceptionInfo->ContextRecord->Esp = new_safe_esp;
               /* Call stack_overflow_handler(faulting_page_address,safe_context).  */
               ExceptionInfo->ContextRecord->Eip = (uintptr_t)&stack_overflow_handler;
+#endif
               *(uintptr_t *)(new_safe_esp + 4) = faulting_page_address;
               *(uintptr_t *)(new_safe_esp + 8) = (uintptr_t) safe_context;
               return EXCEPTION_CONTINUE_EXECUTION;
